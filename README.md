@@ -2,6 +2,12 @@
 
 An [n8n](https://n8n.io) workflow that automatically audits CRM data quality every week, writes an AI-generated summary report, emails it out, and serves a live dashboard on demand.
 
+![Workflow](assets/workflow.png)
+
+## Dashboard
+
+![Dashboard](assets/dashboard.png)
+
 ## What it does
 
 **Weekly run (every Monday at 08:00):**
