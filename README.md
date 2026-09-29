@@ -127,4 +127,4 @@ test-data/   mock contacts and deals, plus the list of planted problems
 
 ## Authorship
 
-I designed the checks, wrote the SQL, defined the data model and built the workflow. JavaScript in the code nodes was written with Claude's help.
+I designed the checks, wrote the SQL, defined the data model and built the workflow.
