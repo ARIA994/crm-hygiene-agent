@@ -1,0 +1,33 @@
+﻿hubspot_id,email,first_name,last_name,company,job_title,phone,lead_source,lifecycle_stage,owner,created_at,last_activity
+C1001,lisa.hartmann@nordfracht-logistik.de,Lisa,Hartmann,Nordfracht Logistik,Head of Talent Acquisition,+49 30 6433012,Paid Ads,Opportunity,Chris Lang,2026-08-27 09:00:00,2026-09-23 09:00:00
+C1002,timo.reuter@forto.com,Timo,Reuter,Forto,Head of People,+49 30 9990608,Organic Search,SQL,Chris Lang,2026-08-25 09:00:00,2026-08-26 09:00:00
+C1003,anja.seidel@home24.de,Anja,Seidel,home24,HR Director,+49 30 4602037,Organic Search,Lead,Ben Fischer,2026-05-24 09:00:00,2026-09-23 09:00:00
+C1004,jan.pohl@staffbase.com,Jan,Pohl,Staffbase,VP People,+49 30 5037655,Organic Search,Opportunity,Anna Weber,2026-04-17 09:00:00,2026-09-20 09:00:00
+C1005,philipp.krause@misterspex.de,Philipp,Krause,Mister Spex,Talent Acquisition Lead,+49 30 4745328,Outbound,Lead,Chris Lang,2026-04-12 09:00:00,2026-09-02 09:00:00
+C1006,nora.baumann@scandit.com,Nora,Baumann,Scandit,HR Business Partner,+49 30 1831970,Paid Ads,Lead,Chris Lang,2026-08-05 09:00:00,2026-09-09 09:00:00
+C1007,sem.bakker@mollie.com,Sem,Bakker,Mollie,IT Director,+49 30 8031986,Paid Ads,Lead,Chris Lang,2026-06-22 09:00:00,2026-08-23 09:00:00
+C1008,leonie.hartwig@contentful.com,Leonie,Hartwig,Contentful,Head of Talent,+49 30 4032085,Organic Search,MQL,Ben Fischer,2026-08-15 09:00:00,2026-08-23 09:00:00
+C1009,mara.lindner@sennder.com,Mara,Lindner,sennder,Head of Talent Acquisition,+49 30 2053424,Outbound,Lead,Chris Lang,2026-07-18 09:00:00,2026-08-27 09:00:00
+C1010,katrin.wolf@stahlform-werke.de,Katrin,Wolf,Stahlform Werke,HR Director,+49 30 9920785,Referral,SQL,Ben Fischer,2026-04-12 09:00:00,2026-08-29 09:00:00
+C1011,sophie.vandijk@brugwater.nl,Sophie,van Dijk,Brugwater Logistics,Talent Acquisition Lead,+49 30 7066345,Webinar,MQL,Anna Weber,2026-03-14 09:00:00,2026-09-12 09:00:00
+C1012,markus.gruber@alpenmarkt-online.at,Markus,Gruber,Alpenmarkt Online,HR Director,+49 30 2373299,Outbound,SQL,Chris Lang,2026-05-05 09:00:00,2026-09-06 09:00:00
+C1013,daniel.hofer@bergpfad.ch,Daniel,Hofer,Bergpfad Retail,Head of Talent Acquisition,+49 30 8530188,Webinar,Lead,Anna Weber,2026-04-30 09:00:00,2026-09-01 09:00:00
+C1014,eva.janssen@stroomlijn-fulfilment.nl,Eva,Janssen,Stroomlijn Fulfilment,Head of Recruitment,+49 30 3767604,Webinar,MQL,Ben Fischer,2026-05-24 09:00:00,2026-09-25 09:00:00
+C1015,felix.braun@datenhafen.io,Felix,Braun,Datenhafen,VP People,+49 30 2302255,Outbound,SQL,Ben Fischer,2026-03-15 09:00:00,2026-09-05 09:00:00
+C1016,sabine.krueger@rheinbogen-logistik.de,Sabine,Krueger,Rheinbogen Logistik,Leiterin Personal,+49 30 9332820,Outbound,Opportunity,Anna Weber,2026-08-16 09:00:00,2026-09-10 09:00:00
+C1017,tobias.schneider@kessler-voss.de,Tobias,Schneider,Kessler & Voss,Head of Talent,+49 30 8954050,Organic Search,Lead,Chris Lang,2026-03-13 09:00:00,2026-09-08 09:00:00
+C1018,julia.meier@nordlicht-medien.de,Julia,Meier,Nordlicht Medien,HR Generalist,+49 30 8476611,Webinar,Opportunity,Chris Lang,2026-06-12 09:00:00,2026-09-26 09:00:00
+C2001,LISA.HARTMANN@nordfracht-logistik.de,Lisa,Hartmann,Nordfracht Logistik GmbH,Head of Talent,+49 30 5551234,Paid Ads,Lead,Ben Fischer,2026-09-10 09:00:00,2026-09-24 09:00:00
+C2002,l.hartmann@nordfracht-logistik.de,Lisa,Hartmann,Nordfracht Logistik,Head of Talent Acquisition,,Outbound,Lead,Chris Lang,2026-09-16 09:00:00,2026-09-19 09:00:00
+C2003,timo.reuter@forto.com,Timo,Reuter,Forto GmbH,Head of People,+49 30 7778888,Referral,MQL,Anna Weber,2026-09-19 09:00:00,2026-09-25 09:00:00
+C2101,p.neumann@gmail.com,Peter,Neumann,,Recruiter,,Organic Search,Lead,Anna Weber,2026-07-30 09:00:00,2026-08-04 09:00:00
+C2102,s.hoffmann@web.de,Sarah,Hoffmann,,,+49 170 1234567,,Lead,Ben Fischer,2026-08-14 09:00:00,2026-08-14 09:00:00
+C2103,info@kranwerk-maschinenbau.de,,,Kranwerk Maschinenbau,,,Webinar,Lead,Chris Lang,2026-08-29 09:00:00,2026-08-31 09:00:00
+C2104,m.bauer@veltrix-pharma.de,Michael,Bauer,Veltrix Pharma,Head of HR,+49 89 4445555,,MQL,Anna Weber,2026-09-03 09:00:00,2026-09-22 09:00:00
+C2105,k.schuster@almblick-bau.at,Karin,Schuster,Almblick Bau,HR Manager,,,Lead,Ben Fischer,2026-09-06 09:00:00,2026-09-08 09:00:00
+C2106,max@@test,Max,Berger,Testfirma,Manager,,Outbound,Lead,Chris Lang,2026-09-13 09:00:00,2026-09-13 09:00:00
+C2107,no-email-here,Petra,Huber,Huber Consulting,Owner,,Referral,Lead,Anna Weber,2026-09-14 09:00:00,2026-09-14 09:00:00
+C2108,,Lukas,Wagner,Kodewerk Studio,Founder,+49 30 2223333,Organic Search,Lead,Ben Fischer,2026-09-17 09:00:00,2026-09-17 09:00:00
+C2109,a.krause@hafenblick-hotels.de,Andrea,Krause,Hafenblick Hotels,HR Manager,+49 40 1112222,Paid Ads,Lead,Ben Fischer,2026-06-25 09:00:00,
+C2110,t.vogel@tulpveld.nl,Tom,Vogel,Tulpveld Foods,Recruiter,,Webinar,Lead,Ben Fischer,2026-07-02 09:00:00,
+C2111,n.richter@pixelbau.de,Nina,Richter,Pixelbau Agentur,CEO,+49 30 9998888,Referral,MQL,Chris Lang,2026-07-20 09:00:00,
