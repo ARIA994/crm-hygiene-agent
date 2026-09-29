@@ -1,0 +1,505 @@
+{
+  "name": "CRM Hygiene Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        160
+      ],
+      "name": "Every Monday 08:00"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select lower(first_name) as first_name,\n       lower(last_name)  as last_name,\n       email_domain,\n       count(*)                     as records,\n       string_agg(hubspot_id, ', ') as ids,\n       string_agg(email, ', ')      as emails,\n       string_agg(distinct owner, ', ') as owners\nfrom contacts\nwhere first_name <> '' and last_name <> '' and email_domain is not null\ngroup by lower(first_name), lower(last_name), email_domain\nhaving count(*) > 1\norder by count(*) desc;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        -224
+      ],
+      "name": "Q1 duplicates",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select 'No company' as problem, count(*) as records\nfrom contacts where company is null or company = ''\nunion all\nselect 'No lead source', count(*)\nfrom contacts where lead_source is null or lead_source = ''\nunion all\nselect 'Invalid or missing email', count(*)\nfrom contacts where email is null or email = '' or email not like '%_@_%._%'\nunion all\nselect 'Never touched', count(*)\nfrom contacts where last_activity is null\norder by records desc;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        -32
+      ],
+      "name": "Q2 incomplete",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select owner,\n       count(*)                                as stale_deals,\n       sum(amount)                             as value_at_risk,\n       max(current_date - last_activity::date) as longest_silence_days\nfrom deals\nwhere closed_at is null\n  and last_activity < current_date - interval '30 days'\ngroup by owner\norder by value_at_risk desc;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        160
+      ],
+      "name": "Q3 stale deals",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select stage,\n       count(*)    as deals,\n       sum(amount) as value,\n       round(avg(current_date - created_at::date)) as avg_age_days\nfrom deals\ngroup by stage\norder by case stage\n  when 'New' then 1 when 'Demo Booked' then 2 when 'Demo Done' then 3\n  when 'Proposal Sent' then 4 when 'Closed Won' then 5 else 6 end;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        352
+      ],
+      "name": "Q4 funnel",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select hubspot_id, name, stage,\n       coalesce(nullif(owner, ''), '(no owner)') as owner,\n       concat_ws(', ',\n         case when owner is null or owner = ''  then 'no owner'  end,\n         case when amount is null or amount = 0 then 'no amount' end,\n         case when contact_id not in (select hubspot_id from contacts) then 'orphan' end,\n         case when closed_at is null and created_at < current_date - interval '180 days'\n              then 'open 6+ months' end\n       ) as problems\nfrom deals\nwhere owner = '' or owner is null or amount = 0 or amount is null\n   or contact_id not in (select hubspot_id from contacts)\n   or (closed_at is null and created_at < current_date - interval '180 days');",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        224,
+        544
+      ],
+      "name": "Q5 deal issues",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        112
+      ],
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull each query's rows by node name, so order never matters\nconst rows = name => {\n  try { return $(name).all().map(i => i.json); } catch (e) { return []; }\n};\n\nconst duplicates = rows('Q1 duplicates');\nconst incomplete = rows('Q2 incomplete');\nconst stale      = rows('Q3 stale deals');\nconst funnel     = rows('Q4 funnel');\nconst issues     = rows('Q5 deal issues');\n\nconst num = v => Number(v) || 0;\n\n// Totals computed here, so the model never has to do arithmetic\nconst staleCount = stale.reduce((s, r) => s + num(r.stale_deals), 0);\nconst staleValue = stale.reduce((s, r) => s + num(r.value_at_risk), 0);\nconst worstOwner = stale.length ? stale[0].owner : null;\n\nconst stageCount = s => num((funnel.find(r => r.stage === s) || {}).deals);\nconst openDeals  = funnel.filter(r => !String(r.stage).startsWith('Closed'))\n                         .reduce((s, r) => s + num(r.deals), 0);\nconst won  = stageCount('Closed Won');\nconst lost = stageCount('Closed Lost');\nconst demoDone = stageCount('Demo Done') + stageCount('Proposal Sent') + won + lost;\nconst proposals = stageCount('Proposal Sent') + won + lost;\n\nconst pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;\n\nreturn [{ json: {\n  week_of: new Date().toISOString().slice(0, 10),\n  duplicates: { groups: duplicates.length, detail: duplicates },\n  incomplete: { detail: incomplete },\n  stale: { count: staleCount, value: staleValue, worst_owner: worstOwner, by_owner: stale },\n  funnel: { detail: funnel, open_deals: openDeals, won, lost,\n            demo_to_proposal_pct: pct(proposals, demoDone),\n            win_rate_pct: pct(won, won + lost) },\n  deal_issues: { count: issues.length, detail: issues }\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        160
+      ],
+      "name": "Build findings"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into weekly_snapshots\n  (week_of, duplicates, no_company, no_source, never_touched, invalid_email,\n   stale_deals, stale_value, open_deals, won_deals, win_rate_pct)\nvalues\n  ('{{ $json.week_of }}',\n   {{ $json.duplicates.groups }},\n   {{ $json.incomplete.detail.find(r => r.problem === 'No company')?.records || 0 }},\n   {{ $json.incomplete.detail.find(r => r.problem === 'No lead source')?.records || 0 }},\n   {{ $json.incomplete.detail.find(r => r.problem === 'Never touched')?.records || 0 }},\n   {{ $json.incomplete.detail.find(r => r.problem === 'Invalid or missing email')?.records || 0 }},\n   {{ $json.stale.count }},\n   {{ $json.stale.value }},\n   {{ $json.funnel.open_deals }},\n   {{ $json.funnel.won }},\n   {{ $json.funnel.win_rate_pct }})\non conflict (week_of) do update set\n  duplicates    = excluded.duplicates,\n  no_company    = excluded.no_company,\n  no_source     = excluded.no_source,\n  never_touched = excluded.never_touched,\n  invalid_email = excluded.invalid_email,\n  stale_deals   = excluded.stale_deals,\n  stale_value   = excluded.stale_value,\n  open_deals    = excluded.open_deals,\n  won_deals     = excluded.won_deals,\n  win_rate_pct  = excluded.win_rate_pct;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1008,
+        -16
+      ],
+      "name": "Save snapshot",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from weekly_snapshots\nwhere week_of < '{{ $('Build findings').item.json.week_of }}'\norder by week_of desc\nlimit 1;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1008,
+        224
+      ],
+      "name": "Get last week",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=This week: {{ JSON.stringify($('Build findings').item.json) }}\n\nLast week: {{ JSON.stringify($json) }}",
+        "options": {
+          "systemMessage": "You write a weekly CRM health report for a sales manager at a B2B SaaS company.\n\nRules:\n- Use only the numbers given to you. Never calculate, estimate or invent a number.\n- All amounts are in EUR. Write them as \"EUR 181,000\".\n- Lead with what changed most since last week. If there is no previous week, say it is the first report and skip comparisons.\n- Last week's data contains only summary counts, not detail. Compare a number to last week only when the same field exists in both. Never warn the reader about data limitations; simply leave out comparisons you cannot make.\n- Name owners when a problem is concentrated with one person. State it as a fact, not an accusation.\n- Say what to do about each finding, in one short sentence.\n- Plain English. No buzzwords. No greeting, no sign-off. No markdown formatting, no asterisks.\n- Maximum 3 bullet points per section. Maximum 250 words.\n\nFormat:\nA one-sentence summary line, then three sections with these headings on their own line:\nPipeline at risk\nData quality\nWorth checking"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1232,
+        224
+      ],
+      "name": "Write report (AI)"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-haiku-4-5-20251001",
+          "cachedResultName": "Claude Haiku 4.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        1104,
+        432
+      ],
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "manager@example.com",
+        "subject": "=CRM health report, week of {{ $('Build findings').item.json.week_of }}",
+        "emailType": "text",
+        "message": "={{ $json.output }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        224
+      ],
+      "name": "Email the report",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "crm-dashboard",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        192,
+        960
+      ],
+      "name": "Dashboard request"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select\n  (select count(*) from contacts) as total_contacts,\n  (select count(*) from deals)    as total_deals,\n\n  (select count(*) from deals\n     where closed_at is null\n       and last_activity < current_date - interval '30 days') as stale_deals,\n\n  (select coalesce(sum(amount), 0) from deals\n     where closed_at is null\n       and last_activity < current_date - interval '30 days') as stale_value,\n\n  (select count(*) from contacts\n     where company is null or company = ''\n        or lead_source is null or lead_source = ''\n        or email is null or email = '' or email not like '%_@_%._%'\n        or last_activity is null) as incomplete_contacts,\n\n  (select count(*) from (\n      select 1 from contacts\n      where first_name <> '' and last_name <> '' and email_domain is not null\n      group by lower(first_name), lower(last_name), email_domain\n      having count(*) > 1) d) as duplicate_groups,\n\n  (select json_agg(f) from (\n      select stage, count(*) as deals, coalesce(sum(amount), 0) as value\n      from deals group by stage\n      order by case stage\n        when 'New' then 1 when 'Demo Booked' then 2 when 'Demo Done' then 3\n        when 'Proposal Sent' then 4 when 'Closed Won' then 5 else 6 end) f) as funnel,\n\n  (select json_agg(o) from (\n      select owner, count(*) as stale_deals, coalesce(sum(amount), 0) as value_at_risk\n      from deals\n      where closed_at is null and last_activity < current_date - interval '30 days'\n      group by owner order by 3 desc) o) as stale_by_owner,\n\n  (select json_agg(s) from (\n      select week_of, stale_deals, stale_value, duplicates, open_deals\n      from weekly_snapshots order by week_of desc limit 6) s) as history;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        416,
+        960
+      ],
+      "name": "Dashboard data",
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $json;\nconst n = v => Number(v) || 0;\nconst arr = v => Array.isArray(v) ? v : (v ? JSON.parse(v) : []);\n\nconst funnel  = arr(d.funnel);\nconst owners  = arr(d.stale_by_owner);\nconst history = arr(d.history);\n\nconst eur = v => 'EUR ' + n(v).toLocaleString('de-DE');\n\n// Previous week comes from the snapshot history (index 1 = the week before this one)\nconst prev = history[1] || null;\nconst delta = (now, before) => {\n  if (!prev || before === undefined || before === null) return '';\n  const diff = n(now) - n(before);\n  if (diff === 0) return '<span class=\"flat\">no change</span>';\n  const cls = diff > 0 ? 'up' : 'down';\n  return `<span class=\"${cls}\">${diff > 0 ? '+' : ''}${diff.toLocaleString('de-DE')} vs last week</span>`;\n};\n\nconst maxDeals = Math.max(1, ...funnel.map(f => n(f.deals)));\n\nconst tile = (label, value, sub) =>\n  `<div class=\"tile\"><div class=\"label\">${label}</div><div class=\"value\">${value}</div><div class=\"sub\">${sub || ''}</div></div>`;\n\nconst funnelRows = funnel.map(f => `\n  <tr>\n    <td class=\"stage\">${f.stage}</td>\n    <td class=\"barcell\"><div class=\"bar\" style=\"width:${Math.round(100 * n(f.deals) / maxDeals)}%\"></div></td>\n    <td class=\"num\">${n(f.deals)}</td>\n    <td class=\"num\">${eur(f.value)}</td>\n  </tr>`).join('');\n\nconst ownerRows = owners.map(o => `\n  <tr>\n    <td>${o.owner || '(no owner)'}</td>\n    <td class=\"num\">${n(o.stale_deals)}</td>\n    <td class=\"num\">${eur(o.value_at_risk)}</td>\n  </tr>`).join('');\n\nconst historyRows = history.map(h => `\n  <tr>\n    <td>${String(h.week_of).slice(0, 10)}</td>\n    <td class=\"num\">${n(h.stale_deals)}</td>\n    <td class=\"num\">${eur(h.stale_value)}</td>\n    <td class=\"num\">${n(h.duplicates)}</td>\n    <td class=\"num\">${n(h.open_deals)}</td>\n  </tr>`).join('');\n\nconst html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>CRM Health Dashboard</title>\n<style>\n  :root { --bg:#f6f7f9; --card:#fff; --ink:#1a1a1a; --muted:#6b7280;\n          --line:#e5e7eb; --bad:#b42b2b; --good:#0e6b3a; }\n  * { box-sizing:border-box; }\n  body { margin:0; padding:32px 20px; background:var(--bg); color:var(--ink);\n         font:15px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,sans-serif; }\n  .wrap { max-width:960px; margin:0 auto; }\n  h1 { font-size:22px; margin:0 0 4px; }\n  .date { color:var(--muted); font-size:13px; margin-bottom:24px; }\n  h2 { font-size:15px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }\n  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:28px; }\n  .tile { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }\n  .label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }\n  .value { font-size:26px; font-weight:600; margin:6px 0 2px; }\n  .sub { font-size:12px; color:var(--muted); }\n  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:22px; }\n  table { width:100%; border-collapse:collapse; font-size:14px; }\n  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em;\n       color:var(--muted); font-weight:600; padding:0 8px 8px 0; }\n  td { padding:7px 8px 7px 0; border-top:1px solid var(--line); }\n  .num { text-align:right; white-space:nowrap; }\n  .stage { width:130px; }\n  .barcell { width:45%; }\n  .bar { height:10px; background:var(--good); border-radius:5px; min-width:3px; }\n  .up { color:var(--bad); } .down { color:var(--good); } .flat { color:var(--muted); }\n  footer { color:var(--muted); font-size:12px; text-align:center; margin-top:28px; }\n  @media (max-width:560px){ .barcell{display:none;} .stage{width:auto;} }\n</style>\n</head>\n<body>\n<div class=\"wrap\">\n  <h1>CRM Health Dashboard</h1>\n  <div class=\"date\">Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC</div>\n\n  <div class=\"tiles\">\n    ${tile('Stale deals', n(d.stale_deals), prev ? delta(d.stale_deals, prev.stale_deals) : 'no activity 30+ days')}\n    ${tile('Value at risk', eur(d.stale_value), prev ? delta(d.stale_value, prev.stale_value) : 'in stale deals')}\n    ${tile('Duplicate groups', n(d.duplicate_groups), prev ? delta(d.duplicate_groups, prev.duplicates) : 'same person, several records')}\n    ${tile('Incomplete contacts', n(d.incomplete_contacts), 'of ' + n(d.total_contacts) + ' total')}\n  </div>\n\n  <div class=\"card\">\n    <h2>Pipeline by stage</h2>\n    <table>\n      <tr><th>Stage</th><th></th><th class=\"num\">Deals</th><th class=\"num\">Value</th></tr>\n      ${funnelRows}\n    </table>\n  </div>\n\n  <div class=\"card\">\n    <h2>Stale deals by owner</h2>\n    <table>\n      <tr><th>Owner</th><th class=\"num\">Deals</th><th class=\"num\">Value at risk</th></tr>\n      ${ownerRows || '<tr><td colspan=\"3\">Nothing stale. Good week.</td></tr>'}\n    </table>\n  </div>\n\n  <div class=\"card\">\n    <h2>Week over week</h2>\n    <table>\n      <tr><th>Week of</th><th class=\"num\">Stale</th><th class=\"num\">At risk</th><th class=\"num\">Duplicates</th><th class=\"num\">Open deals</th></tr>\n      ${historyRows || '<tr><td colspan=\"5\">No history yet.</td></tr>'}\n    </table>\n  </div>\n\n  <footer>${n(d.total_contacts)} contacts, ${n(d.total_deals)} deals. Built with n8n, Supabase and Claude.</footer>\n</div>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        960
+      ],
+      "name": "Build HTML"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        864,
+        960
+      ],
+      "name": "Respond to Webhook"
+    }
+  ],
+  "connections": {
+    "Every Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Q1 duplicates",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Q2 incomplete",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Q3 stale deals",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Q4 funnel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Q5 deal issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q1 duplicates": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q2 incomplete": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Q3 stale deals": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Q4 funnel": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Q5 deal issues": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Build findings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build findings": {
+      "main": [
+        [
+          {
+            "node": "Save snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save snapshot": {
+      "main": [
+        [
+          {
+            "node": "Get last week",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get last week": {
+      "main": [
+        [
+          {
+            "node": "Write report (AI)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write report (AI)": {
+      "main": [
+        [
+          {
+            "node": "Email the report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write report (AI)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dashboard request": {
+      "main": [
+        [
+          {
+            "node": "Dashboard data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dashboard data": {
+      "main": [
+        [
+          {
+            "node": "Build HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
