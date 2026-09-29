@@ -2,8 +2,6 @@
 
 An [n8n](https://n8n.io) workflow that automatically audits CRM data quality every week, writes an AI-generated summary report, emails it out, and serves a live dashboard on demand.
 
-![Workflow](assets/workflow.png)
-
 ## Dashboard
 
 ![Dashboard](assets/dashboard.png)
@@ -28,16 +26,7 @@ An [n8n](https://n8n.io) workflow that automatically audits CRM data quality eve
 
 ## Workflow structure
 
-```
-Every Monday 08:00
-  ├─ Q1 duplicates ─┐
-  ├─ Q2 incomplete ─┤
-  ├─ Q3 stale deals ─┼─ Merge ─ Build findings ─ Save snapshot ─ Get last week ─ Write report (AI) ─ Email the report
-  ├─ Q4 funnel ──────┤                                                              │
-  └─ Q5 deal issues ─┘                                                    Anthropic Chat Model
-
-Dashboard request (webhook) ─ Dashboard data ─ Build HTML ─ Respond to Webhook
-```
+![Workflow](assets/workflow.png)
 
 ## Requirements
 
